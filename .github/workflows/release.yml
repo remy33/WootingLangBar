@@ -1,0 +1,54 @@
+# Builds WootingLangBar on every push to main that changes the app and publishes it as a GitHub Release: a zip with
+# one self-contained exe (no .NET install needed) that anyone can download from the Releases page.
+# Pull requests are only built, as a check. Actions are pinned to commit SHAs so a moved tag cannot change the build.
+name: Build and release
+
+on:
+  push:
+    branches: [main]
+    paths: ['**.cs', '**.csproj', 'config.json', 'THIRD-PARTY-NOTICES.txt', '.github/workflows/release.yml']
+  pull_request:
+  workflow_dispatch:             # "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  VERSION_BASE: '1.0'            # releases are numbered VERSION_BASE.<run number>; raise it for big changes
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write            # only the release step on main uses it
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1     # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build the release zip
+        shell: pwsh
+        run: |
+          $version = "$env:VERSION_BASE.$env:GITHUB_RUN_NUMBER"
+          $out = "out/WootingLangBar"
+          dotnet publish WootingLangBar.csproj -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=none -p:ContinuousIntegrationBuild=true -p:Version=$version -o $out
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item README.md, LICENSE, THIRD-PARTY-NOTICES.txt $out
+          Compress-Archive -Path "$out/*" -DestinationPath "WootingLangBar-$version-win-x64.zip"
+          "VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Publish the GitHub release
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$env:VERSION" "WootingLangBar-$env:VERSION-win-x64.zip" `
+            --title "WootingLangBar $env:VERSION" --target $env:GITHUB_SHA --generate-notes

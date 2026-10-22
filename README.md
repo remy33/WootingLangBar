@@ -5,6 +5,17 @@ Windows tray app that shows the current Windows input language on a Wooting 80HE
 indicator keep working. Nothing is written to the keyboard's flash; every change is a RAM-only update, the same
 path Wootility uses for its live preview.
 
+## Download
+
+1. Download `WootingLangBar-x.y.z-win-x64.zip` from the [latest release](https://github.com/remy33/WootingLangBar/releases/latest).
+2. Unzip it into a folder of your choice (for example `C:\Tools\WootingLangBar`) and run `WootingLangBar.exe`.
+   Nothing else to install: .NET is included in the exe.
+3. Optional, start at logon: press Win+R, type `shell:startup`, and put a shortcut to `WootingLangBar.exe` there.
+
+Settings live in `config.json` next to the exe (tray menu: Edit config.json, then Reload config).
+The exe is not code-signed, so Windows SmartScreen may say it is unrecognized: click **More info**, then **Run anyway**.
+Every release is built from this repository's source by [GitHub Actions](.github/workflows/release.yml).
+
 ## How it works
 
 Everything is one `profiles.LEDBarProfile` protobuf uploaded with Wootility's "set LED bar profile" output report,
@@ -32,7 +43,7 @@ Caps Lock: the keyboard's own Caps Lock indicator keeps working. Optionally, `"b
 bar LEDs white while Caps Lock is on (bar/both mode only; key mode never draws on the bar), and `"keys"` paints keys
 with the Caps colour.
 
-## Install
+## Build from source
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -42,6 +53,9 @@ Builds to `dist\`, starts the tray icon, adds a Startup-folder shortcut (runs at
 [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0); the published exe only needs the .NET 10 Desktop Runtime.
 Running `install.ps1` again rebuilds and restarts the app and keeps your edited `dist\config.json`.
 `uninstall.ps1` restores the keyboard, stops the app and removes the shortcut.
+
+Releases: every push to `main` that changes the app builds a new numbered release (`1.0.<run number>`, see
+`VERSION_BASE` in the workflow); pull requests are only built.
 
 ## config.json
 
