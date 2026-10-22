@@ -1,0 +1,25 @@
+{
+  // mode "bar": the light bar shows the language colour (RAM only, the saved profile is untouched).
+  // mode "key": the keys below show it instead.  "both": the light bar and the keys.
+  "mode": "key",
+
+  // Colour per language: "he", "en", "other" (any other language), a 2-letter ISO code ("ru", "ar"), or a hex LANGID ("0419").
+  // Remove a language to leave the bar/keys at their normal profile lighting for that language.
+  "colors": {
+    "he": "#2979FF",
+    "en": "#E81B23",
+    "other": "#D500F9"
+  },
+
+  // Key mode: keys that show the language colour, as [row, column]. Row 0 = F-row, 1 = numbers, 2 = Tab/QWERTY,
+  // 3 = Caps Lock/ASDF, 4 = Shift/ZXCV, 5 = Ctrl/Space. Column 0 = leftmost key of that row.
+  // [0, 0] = Esc. Find a key with:  WootingLangBar.exe --key 3 0   (lights it for 5 seconds)
+  "keys": [[0, 0]],
+
+  // Caps Lock indicator while Caps Lock is on: "barLeds" = light bar LEDs (0 = top .. 9 = bottom) painted with "color"
+  // on top of the language colour (bar/both mode only); "keys" = keys painted with it. Empty lists disable each part.
+  "capsLock": { "barLeds": [8, 9], "keys": [], "color": "#FFFFFF" },
+
+  "pollMs": 100,
+  "resyncMs": 2000
+}
