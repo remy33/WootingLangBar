@@ -38,16 +38,17 @@ with the Caps colour.
 powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
-Builds to `dist\`, starts the tray icon, adds a Startup-folder shortcut (runs at logon). Building needs the .NET 7 SDK;
-the published exe only needs the .NET 7 Desktop Runtime.
-`uninstall.ps1` stops it and removes the shortcut.
+Builds to `dist\`, starts the tray icon, adds a Startup-folder shortcut (runs at logon). Building needs the
+[.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0); the published exe only needs the .NET 10 Desktop Runtime.
+Running `install.ps1` again rebuilds and restarts the app and keeps your edited `dist\config.json`.
+`uninstall.ps1` restores the keyboard, stops the app and removes the shortcut.
 
 ## config.json
 
 ```jsonc
 {
     "mode": "key", // "bar" | "key" | "both"
-    "colors": { "he": "#2979FF", "en": "#00E676", "other": "#D500F9" },
+    "colors": { "he": "#2979FF", "en": "#E81B23", "other": "#D500F9" },
     "keys": [[0, 0]], // key mode: [row, column], row 0 = F-row, column 0 = leftmost (Esc)
     "capsLock": { "barLeds": [8, 9], "keys": [], "color": "#FFFFFF" },
     "pollMs": 100,
@@ -66,7 +67,7 @@ Status (language, Caps), Pause/Resume, Edit config.json, Reload config, Open log
 
 ```powershell
 .\dist\WootingLangBar.exe --key ROW COL [RRGGBB] [SECONDS]  # draw a key (default red, 5 s), log what it shows (find coordinates)
-.\dist\WootingLangBar.exe --bar RRGGBB [--caps] [--inherit]   # paint the bar now (RAM) and read back what it shows
+.\dist\WootingLangBar.exe --bar RRGGBB [--caps] [--inherit] [--slot N]   # paint the bar now (RAM) and read back what it shows
 .\dist\WootingLangBar.exe --barreset                # hand the bar back to the global bar ("inherit global")
 .\dist\WootingLangBar.exe --barread               # read the bar's current colours
 .\dist\WootingLangBar.exe --bardump               # stored LED bar profile of the active slot and the global one (hex)
@@ -79,6 +80,8 @@ Status (language, Caps), Pause/Resume, Edit config.json, Reload config, Open log
 
 Add `--quiet` to skip the message box; results always go to `%LOCALAPPDATA%\WootingLangBar\log.txt`.
 Invalid arguments and HID errors are reported the same way instead of crashing.
+These helpers talk to the keyboard directly, so Pause the tray app first (tray menu) or it may draw over their
+result, and Resume it afterwards.
 
 `--raw` sends any feature command to the keyboard unchecked. Commands outside the table below can change
 keyboard state in ways this app does not know how to undo, so use it only when you know what the command does.

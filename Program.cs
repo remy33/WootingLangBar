@@ -59,21 +59,26 @@ static class Program
             return "exit requested, but the app is still running";
         }
 
+        string[] commands = { "--get", "--set", "--key", "--bar", "--bardump", "--frame", "--barreset", "--barread", "--reset", "--raw", "--quiet" };
+        if (Array.IndexOf(commands, args[0]) < 0) return $"unknown command \"{args[0]}\" (see \"Command line helpers\" in README.md)";
+
         using var kb = WootingHid.TryOpen(_ => { });
         if (kb == null) return "Wooting keyboard not found";
 
-        if (args[0] == "--set" && args.Length > 1 && int.TryParse(args[1], out int slot))
+        if (args[0] == "--set")
         {
-            if (slot < 1 || slot > 32) return $"--set: slot must be 1..32, got {slot}";
+            if (args.Length < 2 || !int.TryParse(args[1], out int slot) || slot < 1 || slot > 32) return "usage: --set N   (slot 1..32)";
             bool ok = kb.ActivateProfile(slot - 1);
             Thread.Sleep(200);
             var now = kb.GetActiveProfile();
             return $"ActivateProfile({slot}): {(ok ? "ok" : "rejected")}; active now: slot {now + 1}";
         }
-        if (args[0] == "--key" && args.Length > 2 && int.TryParse(args[1], out int row) && int.TryParse(args[2], out int col))
+        if (args[0] == "--key")
         {
             // --key ROW COL [RRGGBB] [SECONDS]: draws the colour on that key (same method as key mode) and logs what the key
             // really shows 4x a second, then reloads the profile. Use it to find a key's coordinates.
+            if (args.Length < 3 || !int.TryParse(args[1], out int row) || !int.TryParse(args[2], out int col)) return "usage: --key ROW COL [RRGGBB] [SECONDS]";
+            if (!Config.KeyInRange(row, col)) return $"--key: row must be 0..7 and column 0..31, got [{row},{col}]";
             var c = args.Length > 3 && !args[3].StartsWith("--") ? Config.ParseColor(args[3]) : Color.Red;
             int secs = args.Length > 4 && int.TryParse(args[4], out int s) ? Math.Clamp(s, 1, 300) : 5;
             int cur = kb.GetActiveProfile() ?? 0;
@@ -92,12 +97,16 @@ static class Program
             Thread.Sleep(300);
             return $"key [{row},{col}] {ColorHexOf(c)} for {secs} s on slot {cur + 1}: {(ok ? "sent" : "failed")}; key after restore: {RenderedKey(kb, row, col)}";
         }
-        if (args[0] == "--bar" && args.Length > 1)
+        if (args[0] == "--bar")
         {
             // --bar RRGGBB : light bar solid colour in RAM (Wootility preview path), then read back what the bar shows
+            if (args.Length < 2 || args[1].StartsWith("--")) return "usage: --bar RRGGBB [--caps] [--inherit] [--slot N]";
             var c = Config.ParseColor(args[1]);
             int si = Array.IndexOf(args, "--slot");
-            int cur = si >= 0 && si + 1 < args.Length ? int.Parse(args[si + 1]) - 1 : (kb.GetActiveProfile() ?? 0);
+            int cur;
+            if (si < 0) cur = kb.GetActiveProfile() ?? 0;
+            else if (si + 1 < args.Length && int.TryParse(args[si + 1], out int n) && n >= 1 && n <= 32) cur = n - 1;
+            else return "--slot: slot must be 1..32";
             var layers = new List<(Color, int, int)> { (c, 0, WootingHid.LightbarLeds - 1) };
             if (Array.IndexOf(args, "--caps") >= 0) layers.Add((Color.White, 8, 9));
             bool ok = kb.SetLightbar(layers, cur, diagnostics: true, inheritGlobal: Array.IndexOf(args, "--inherit") >= 0);
@@ -130,13 +139,14 @@ static class Program
         }
         if (args[0] == "--reset")
             return "ResetAll: " + (kb.ResetAll() ? "ok" : "rejected");
-        if (args[0] == "--raw" && args.Length >= 6)
+        if (args[0] == "--raw")
         {
+            if (args.Length < 6) return "usage: --raw CMD B4 B5 B6 B7   (decimal or 0x hex)";
             byte P(string s) => Convert.ToByte(s, s.StartsWith("0x") ? 16 : 10);
             return kb.Raw(P(args[1]), P(args[2]), P(args[3]), P(args[4]), P(args[5]));
         }
 
-        var active = kb.GetActiveProfile();
+        var active = kb.GetActiveProfile();     // --get
         return active == null ? "no reply from keyboard" : $"Active profile: slot {active + 1}";
     }
 }
@@ -170,11 +180,11 @@ sealed class TrayApp : ApplicationContext
         var menu = new ContextMenuStrip();
         _pause.Click += (_, _) => { _paused = !_paused; _pause.Text = _paused ? "Resume" : "Pause"; };
         var openCfg = new ToolStripMenuItem("Edit config.json");
-        openCfg.Click += (_, _) => Process.Start(new ProcessStartInfo(Config.FilePath) { UseShellExecute = true });
+        openCfg.Click += (_, _) => OpenFile(Config.FilePath);
         var reload = new ToolStripMenuItem("Reload config");
         reload.Click += (_, _) => _reload = true;
         var openLog = new ToolStripMenuItem("Open log");
-        openLog.Click += (_, _) => Process.Start(new ProcessStartInfo(_logPath) { UseShellExecute = true });
+        openLog.Click += (_, _) => OpenFile(_logPath);
         var exit = new ToolStripMenuItem("Exit");
         exit.Click += (_, _) => Exit();
         menu.Items.AddRange(new ToolStripItem[] { _status, new ToolStripSeparator(), _pause, openCfg, reload, openLog, new ToolStripSeparator(), exit });
@@ -207,6 +217,14 @@ sealed class TrayApp : ApplicationContext
         _loop.Join(10000);
         _icon.Visible = false;
         ExitThread();
+    }
+
+    /// <summary>Opens a file in its associated app, or in Notepad when none is set (e.g. no app for .json).</summary>
+    static void OpenFile(string path)
+    {
+        try { Process.Start(new ProcessStartInfo(path) { UseShellExecute = true }); return; } catch { }
+        try { Process.Start("notepad.exe", $"\"{path}\""); }
+        catch (Exception e) { MessageBox.Show($"Cannot open {path}: {e.Message}", "WootingLangBar"); }
     }
 
     void Log(string msg)
@@ -276,10 +294,13 @@ sealed class TrayApp : ApplicationContext
             var c = Config.Load();
             foreach (var w in c.Warnings) Log("config warning: " + w);
             Log($"config: mode={c.Mode} keys={string.Join(" ", c.Keys.Select(k => $"[{k[0]},{k[1]}]"))} colors={string.Join(",", c.Colors.Select(kv => kv.Key + "=" + kv.Value))}");
+            _configError = false;
             return c;
         }
-        catch (Exception e) { Log("config error: " + e.Message); SetStatus("config.json error", "!", Color.Red); return new Config(); }
+        catch (Exception e) { Log("config error: " + e.Message); SetStatus("config.json error", "!", Color.Red); _configError = true; return new Config(); }
     }
+
+    bool _configError;             // loop thread only: config.json failed to load, so the status keeps saying so
 
     /// <summary>Sleeps unless Exit is requested; returns true when cancelled.</summary>
     bool Wait(int ms) => _cts.Token.WaitHandle.WaitOne(ms);
@@ -299,10 +320,10 @@ sealed class TrayApp : ApplicationContext
             {
                 if (_reload)
                 {
+                    if (kb != null && ind.Applied) Release(kb, ind);     // if this throws, _reload stays set and is retried
                     _reload = false;
-                    if (kb != null && ind.Applied) Release(kb, ind);
                     cfg = LoadConfig();
-                    ind = new IndicatorState();
+                    ind.Lang = -1;                                      // re-apply with the new config
                 }
                 if (_paused)
                 {
@@ -314,7 +335,6 @@ sealed class TrayApp : ApplicationContext
                     kb = WootingHid.TryOpen(Log);
                     if (kb == null) { SetStatus("keyboard not found", "--", Color.Gray); Wait(2000); continue; }
                     Log("opened " + kb.DevicePath);
-                    ind = new IndicatorState();
                 }
 
                 IndicatorStep(kb, cfg, ind);
@@ -327,7 +347,8 @@ sealed class TrayApp : ApplicationContext
                 Log($"error ({failures}): {e.Message}");
                 SetStatus("keyboard busy / disconnected", "!", Color.OrangeRed);
                 if (failures >= 3) { try { kb?.Dispose(); } catch { } kb = null; failures = 0; }
-                ind = new IndicatorState();
+                // Keep what may still be on the keyboard, so Pause, Reload and Exit still restore it; re-apply everything.
+                ind.Lang = -1;
                 Wait(2000);
             }
         }
@@ -399,7 +420,7 @@ sealed class TrayApp : ApplicationContext
             {
                 string desc = LangDetect.Describe(lang);
                 Log($"lang {desc} (0x{lang:X4}) caps={capsOn} -> {(color.HasValue ? ColorHex(color.Value) : "profile lighting")} on {(cfg.BarMode ? "bar" : "")}{(cfg.BarMode && cfg.KeyMode ? "+" : "")}{(cfg.KeyMode ? "keys" : "")}");
-                SetStatus($"{desc}{(capsOn ? " + CAPS" : "")}", LangDetect.Iso639(lang).ToUpper(), color ?? Color.DimGray);
+                SetStatus($"{desc}{(capsOn ? " + CAPS" : "")}{(_configError ? " (config.json error)" : "")}", LangDetect.Iso639(lang).ToUpper(), color ?? Color.DimGray);
             }
         }
         st.Lang = lang; st.Caps = capsOn; st.Applied = true; st.LastSync = DateTime.UtcNow;

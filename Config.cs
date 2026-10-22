@@ -15,13 +15,13 @@ public sealed class CapsLockConfig
 public sealed class Config
 {
     /// <summary>"bar" (light bar), "key" (recolour keys), or "both".</summary>
-    [JsonPropertyName("mode")] public string Mode { get; set; } = "bar";
+    [JsonPropertyName("mode")] public string Mode { get; set; } = "key";
 
     /// <summary>Colour per language, shared by the bar and the keys.</summary>
     [JsonPropertyName("colors")] public Dictionary<string, string> Colors { get; set; } = new();
 
     // key mode
-    [JsonPropertyName("keys")] public List<int[]> Keys { get; set; } = new() { new[] { 3, 0 } };
+    [JsonPropertyName("keys")] public List<int[]> Keys { get; set; } = new() { new[] { 0, 0 } };     // Esc
     [JsonPropertyName("capsLock")] public CapsLockConfig? CapsLock { get; set; }
 
     [JsonPropertyName("pollMs")] public int PollMs { get; set; } = 100;
@@ -47,8 +47,8 @@ public sealed class Config
         // JSON "null" for any list/dictionary becomes an empty one instead of a crash later on.
         cfg.Colors ??= new();
         cfg.Keys ??= new();
-        if (string.IsNullOrWhiteSpace(cfg.Mode)) { warn.Add("mode is empty; using \"bar\""); cfg.Mode = "bar"; }
-        else if (!cfg.BarMode && !cfg.KeyMode) { warn.Add($"mode \"{cfg.Mode}\" is not bar/key/both; using \"bar\""); cfg.Mode = "bar"; }
+        if (string.IsNullOrWhiteSpace(cfg.Mode)) { warn.Add("mode is empty; using \"key\""); cfg.Mode = "key"; }
+        else if (!cfg.BarMode && !cfg.KeyMode) { warn.Add($"mode \"{cfg.Mode}\" is not bar/key/both; using \"key\""); cfg.Mode = "key"; }
 
         if (cfg.PollMs < 50) { warn.Add($"pollMs {cfg.PollMs} is below the minimum; using 50"); cfg.PollMs = 50; }
         if (cfg.ResyncMs < 500) { warn.Add($"resyncMs {cfg.ResyncMs} is below the minimum; using 500"); cfg.ResyncMs = 500; }
@@ -71,13 +71,16 @@ public sealed class Config
         return cfg;
     }
 
-    /// <summary>Keeps only well-formed [row, column] pairs inside the key-id address space (row 0..7, column 0..31).</summary>
+    /// <summary>True when [row, column] is inside the key-id address space (row 0..7, column 0..31).</summary>
+    public static bool KeyInRange(int row, int col) => row >= 0 && row < 8 && col >= 0 && col < 32;
+
+    /// <summary>Keeps only well-formed [row, column] pairs inside the key-id address space.</summary>
     static List<int[]> ValidKeys(List<int[]> keys, string name, List<string> warn)
     {
         var ok = new List<int[]>();
         foreach (var k in keys)
         {
-            if (k is { Length: 2 } && k[0] >= 0 && k[0] < 8 && k[1] >= 0 && k[1] < 32) ok.Add(k);
+            if (k is { Length: 2 } && KeyInRange(k[0], k[1])) ok.Add(k);
             else warn.Add($"{name}: [{(k == null ? "" : string.Join(",", k))}] is not a [row, column] pair in range; ignored");
         }
         return ok;

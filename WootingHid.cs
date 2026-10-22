@@ -228,7 +228,7 @@ public sealed class WootingHid : IDisposable
         payload.AddRange(body);
         int reportId, size;
         int n = payload.Count;
-        if (!_multi) { reportId = 0; size = 128; }
+        if (!_multi) { if (n > 128) return false; reportId = 0; size = 128; }
         else if (n <= 32) { reportId = 1; size = 32; }
         else if (n <= 62) { reportId = 2; size = 62; }
         else if (n <= 254) { reportId = 3; size = 254; }
